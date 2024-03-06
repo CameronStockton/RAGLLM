@@ -1,0 +1,276 @@
+version: '3'
+
+services:
+  #From Elastic Github - with adjustments and additions
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+    user: "0"
+    command: >
+      bash -c '
+        if [ x${ELASTIC_PASSWORD} == x ]; then
+          echo "Set the ELASTIC_PASSWORD environment variable in the .env file";
+          exit 1;
+        elif [ x${KIBANA_PASSWORD} == x ]; then
+          echo "Set the KIBANA_PASSWORD environment variable in the .env file";
+          exit 1;
+        fi;
+        if [ ! -f config/certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/certs.zip ]; then
+          echo "Creating certs";
+          echo -ne \
+          "instances:\n"\
+          "  - name: ragllm-es01-1\n"\
+          "    dns:\n"\
+          "      - ragllm-es01-1\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: ragllm-es02-1\n"\
+          "    dns:\n"\
+          "      - ragllm-es02-1\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: ragllm-es03-1\n"\
+          "    dns:\n"\
+          "      - ragllm-es03-1\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          > config/certs/instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key;
+          unzip config/certs/certs.zip -d config/certs;
+        fi;
+        echo "Setting file permissions"
+        chown -R root:root config/certs;
+        find . -type d -exec chmod 750 \{\} \;;
+        find . -type f -exec chmod 640 \{\} \;;
+        echo "Waiting for Elasticsearch availability";
+        until curl -s --cacert config/certs/ca/ca.crt https://ragllm-es01-1:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${KIBANA_PASSWORD}" -H "Content-Type: application/json" https://ragllm-es01-1:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "Setting elastic_system password";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://ragllm-es01-1:9200/_security/user/elastic/_password -d "{\"password\":\"${ELASTIC_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "All done!";
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/ragllm-es01-1/ragllm-es01-1.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  es01:
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata01:/usr/share/elasticsearch/data
+      - certs:/usr/share/elasticsearch/config/certs
+    ports:
+      - ${ES_PORT}:9200
+    environment:
+      - node.name=ragllm-es01-1
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=ragllm-es01-1,ragllm-es02-1,ragllm-es03-1
+      - discovery.seed_hosts=ragllm-es02-1,ragllm-es03-1
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/ragllm-es01-1/ragllm-es01-1.key
+      - xpack.security.http.ssl.certificate=certs/ragllm-es01-1/ragllm-es01-1.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/ragllm-es01-1/ragllm-es01-1.key
+      - xpack.security.transport.ssl.certificate=certs/ragllm-es01-1/ragllm-es01-1.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  es02:
+    depends_on:
+      - es01
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata02:/usr/share/elasticsearch/data
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - node.name=ragllm-es02-1
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=ragllm-es01-1,ragllm-es02-1,ragllm-es03-1
+      - discovery.seed_hosts=ragllm-es01-1,ragllm-es03-1
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/ragllm-es02-1/ragllm-es02-1.key
+      - xpack.security.http.ssl.certificate=certs/ragllm-es02-1/ragllm-es02-1.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/ragllm-es02-1/ragllm-es02-1.key
+      - xpack.security.transport.ssl.certificate=certs/ragllm-es02-1/ragllm-es02-1.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  es03:
+    depends_on:
+      - es02
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata03:/usr/share/elasticsearch/data
+      - certs:/usr/share/elasticsearch/config/certs
+    environment:
+      - node.name=ragllm-es03-1
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=ragllm-es01-1,ragllm-es02-1,ragllm-es03-1
+      - discovery.seed_hosts=ragllm-es01-1,ragllm-es02-1
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/ragllm-es03-1/ragllm-es03-1.key
+      - xpack.security.http.ssl.certificate=certs/ragllm-es03-1/ragllm-es03-1.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/ragllm-es03-1/ragllm-es03-1.key
+      - xpack.security.transport.ssl.certificate=certs/ragllm-es03-1/ragllm-es03-1.crt 
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana:
+    depends_on:
+      es01:
+        condition: service_healthy
+      es02:
+        condition: service_healthy
+      es03:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - kibanadata:/usr/share/kibana/data
+    ports:
+      - ${KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=https://ragllm-es01-1:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+    mem_limit: ${MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  bert:
+    build:
+      context: ./bert
+      dockerfile: Dockerfile
+    stdin_open: true  # Equivalent to -i in docker run
+    tty: true         # Equivalent to -t in docker run
+    volumes:
+      - ./bert:/bert
+      - shared-db-volume:/bert/database
+      - certs:/usr/share/elasticsearch/config/certs:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      kibana:
+        condition: service_healthy
+    environment:
+      ES_HOSTS: '["https://ragllm-es01-1:9200", "https://ragllm-es02-1:9200", "https://ragllm-es03-1:9200"]'
+      ES_CA_CERTS: '/usr/share/elasticsearch/config/certs/ca/ca.crt'
+      ES_USER: 'elastic'
+      ES_PASSWORD: 'laylabakaa'
+    command: python /bert/run.py
+
+  llm:
+    build:
+      context: ./llm
+      dockerfile: Dockerfile
+    stdin_open: true  # Equivalent to -i in docker run
+    tty: true         # Equivalent to -t in docker run
+    volumes:
+      - ./llm:/llm
+      - certs:/usr/share/elasticsearch/config/certs:ro
+    ports:
+      - "5000:5000"
+    depends_on:
+      kibana:
+        condition: service_healthy
+    environment:
+      ES_HOSTS: '["https://ragllm-es01-1:9200", "https://ragllm-es02-1:9200", "https://ragllm-es03-1:9200"]'
+      ES_CA_CERTS: '/usr/share/elasticsearch/config/certs/ca/ca.crt'
+      ES_USER: 'elastic'
+      ES_PASSWORD: 'laylabakaa'
+    command: python /llm/summarizer.py
+
+volumes:
+  shared-db-volume:
+  sqlite-db-volume:
+  es-data:
+  certs:
+    driver: local
+  esdata01:
+    driver: local
+  esdata02:
+    driver: local
+  esdata03:
+    driver: local
+  kibanadata:
+    driver: local
