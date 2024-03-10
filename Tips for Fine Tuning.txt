@@ -1,0 +1,184 @@
+Tips for Fine Tuning
+
+Data Collection:
+1. Collect training data in json files in the form:
+
+{
+  "query": "What is the name of the application with system id 12345?", (query that user would use)
+  "context": "The system identifier of this application is 12345. The name of the application is Test Application.", (context the model should have)
+  "answer": "Test Application" (answer the model should give)
+}
+
+
+2. Clean text by correcting typos, all lowercase, removing extra spaces, etc
+
+
+3. Store data in a JSONL file (.jsonl) each line in the file would look like the template above (#1)
+
+
+Fine Tuning BERT:
+
+1. When fine-tuning models from Hugging Face or using models published on Hugging Face, your data remains private and secure, especially if you're training on your local machine or your private servers.
+
+
+2. Code looks something like this:
+
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Trainer, TrainingArguments
+from datasets import load_dataset
+# Load the tokenizer and model
+tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+model = AutoModelForSequenceClassification.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', num_labels=1) # Adjust num_labels based on your task
+# Load and preprocess the dataset
+def preprocess_data(examples):
+    # Tokenize the inputs (question, context in this case)
+    return tokenizer(examples['query'], examples['context'], truncation=True, padding='max_length')
+train_dataset = load_dataset('json', data_files='path/to/training_data.jsonl', split='train').map(preprocess_data)
+eval_dataset = load_dataset('json', data_files='path/to/validation_data.jsonl', split='train').map(preprocess_data)
+# Define training arguments
+training_args = TrainingArguments(
+    output_dir='./results',          # Output directory
+    num_train_epochs=3,              # Total number of training epochs
+    per_device_train_batch_size=8,   # Batch size per device during training
+    per_device_eval_batch_size=8,    # Batch size for evaluation
+    warmup_steps=500,                # Number of warmup steps for learning rate scheduler
+    weight_decay=0.01,               # Strength of weight decay
+    logging_dir='./logs',            # Directory for storing logs
+    logging_steps=10,
+    evaluation_strategy="steps",     # Evaluation is done (and logged) every logging_steps
+)
+# Initialize the Trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+)
+# Start training
+trainer.train()
+
+
+3. Start small to debug, monitor overfitting and implement early stopping, adjust learning rate and batch size
+
+
+4. BERT model only takes in the query and context. This is because the BERT needs to learn what to return as context
+
+
+5. Use contrastive learning **** READ MORE ABOUT
+
+
+
+
+Enhance Elasticsearch query
+
+
+1. Ensure embeddings are high quality (fine tune BERT)
+
+
+2. Using script_score with vector similarities can be computationally intensive. Consider techniques like approximate nearest neighbor (ANN) search plugins (e.g., Elasticsearch's k-NN plugin, or other third-party solutions) 
+
+
+3. Adjusting the Scoring Formula
+
+
+4. Use eval metrics and incorporate a user feedback loop
+
+
+
+
+
+Fine Tune LLM
+
+
+1. Data looks similar to BERT (can use same one) like this:
+
+{
+  "context": "The system identifier of this application is 12345. The name of the application is Test Application.",
+  "question": "What is the name of the application with system id 12345?",
+  "answers": {
+    "text": ["Test Application"],
+    "answer_start": [60]
+  }
+}
+
+
+2. Code looks something like this:
+
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, Trainer
+from datasets import load_dataset, DatasetDict
+
+model_name = "deepset/roberta-base-squad2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForQuestionAnswering.from_pretrained(model_name)
+
+# Function to tokenize the data
+def prepare_data(examples):
+    tokenized_examples = tokenizer(
+        examples['question'],
+        examples['context'],
+        truncation="only_second",  # Only truncate the context part if needed
+        max_length=384,
+        stride=128,
+        return_overflowing_tokens=True,
+        return_offsets_mapping=True,
+        padding="max_length",
+    )
+    
+    sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
+    offset_mapping = tokenized_examples.pop("offset_mapping")
+
+    tokenized_examples["start_positions"] = []
+    tokenized_examples["end_positions"] = []
+
+    for i, offsets in enumerate(offset_mapping):
+        input_ids = tokenized_examples["input_ids"][i]
+        cls_index = input_ids.index(tokenizer.cls_token_id)
+        
+        sample_index = sample_mapping[i]
+        answers = examples["answers"][sample_index]
+        answer_start = answers["answer_start"][0]
+        answer_end = answer_start + len(answers["text"][0])
+        
+        start_position = cls_index
+        end_position = cls_index
+
+        for idx, (offset_start, offset_end) in enumerate(offsets):
+            if offset_start <= answer_start < offset_end:
+                start_position = idx
+            if offset_start < answer_end <= offset_end:
+                end_position = idx
+
+        tokenized_examples["start_positions"].append(start_position)
+        tokenized_examples["end_positions"].append(end_position)
+
+    return tokenized_examples
+
+# Load and prepare datasets
+data_files = {"train": "path/to/train_data.jsonl", "validation": "path/to/validation_data.jsonl"}
+raw_datasets = load_dataset("json", data_files=data_files, field="data")
+tokenized_datasets = raw_datasets.map(prepare_data, batched=True, remove_columns=raw_datasets["train"].column_names)
+
+# Define training arguments
+training_args = TrainingArguments(
+    output_dir="./results",
+    evaluation_strategy="epoch",
+    learning_rate=5e-5,
+    per_device_train_batch_size=4,
+    per_device_eval_batch_size=4,
+    num_train_epochs=3,
+    weight_decay=0.01,
+)
+
+# Initialize the Trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+)
+
+# Start training
+trainer.train()
+
+
+
+3. Balanced dataset. Have mixture of easy and hard questions

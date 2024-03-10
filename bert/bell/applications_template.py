@@ -1,0 +1,33 @@
+app_template = """The system identifier of this application is {sys_id}. The correlation identifier of this application is {correlation_id}.
+             The asset tag of this application is {asset_tag}. The install status of this application is {install_status}.
+             The short description of this application is: '{short_description}'. The long description of this application is: '{u_long_description}'.
+             The name of this application is {name}. The company that this application belongs to is {company}. The department within that company is {department}.
+             The subcategory of this application is {subcategory}. The business unit of this application is {business_unit}. The barcode for this application is {u_barcode}.
+             The aliases of this application are '{aliases}'. The parent of this application is {parent}. This application is a duplicate of {duplicate_of}. Any associated comments
+             associated with this application are: '{comments}'. The department that manages this department is {u_managed_by_dept}. The assignment group of this application is {assignment_group}.
+             The service owner group is {u_service_owner_group}. The business criticality of this application is {busines_criticality}. The business impact of this application is {u_qs_business_impact}.
+             The support group of this application {support_group}. The application is managed by {managed_by}. The service owner delegate of this application is {service_owner_delegate}.
+             This application is owned by {owned_by}. The change prime of this application is {u_change_prime}. Is the application ignitable: {u_ignitable}. Is the application a bulletin {u_bulletin}.
+             The business relation manager of this application is {business_relation_manager}. The database support for this application {u_database_support}. The DBA support for this application is {u_dba_support}.
+             The DBC support for this application is {u_dbc_support}. The network support for this application is {u_network_support}. The support vendor for this application is {u_support_vendor}.
+             Other supporters of this application are {u_other_support}. The storage support for this application is {u_storage_support}. The maintenance schedule for this application is {maintenance_schedule}.
+             The SLA for this application is {sla}. The SLA objective for this application is {u_sla_objective}. Is this application a problem management candidate: {u_problem_management_candidate}.
+             The problem manager for this application is {u_problem_manager}. The group of the problem manager for this application is {u_problem_manager_group}. The Vice President of factory for this application is {u_vp_of_factory}.
+             This application is supported by {supported_by}. The CI regulations for this application is {u_qs_ci_regulations}. Is this application internet facing: {u_internet_facing}. Is this application on Bell premise: {u_on_bell_premise}.
+             Does Bell own this application's source code: {u_bell_owned_source_code}. The vendor who owns the source code for this application is {u_source_code_vendor}.
+             The vendor hosting this application is {u_hosting_vendor}. Is this application of high value: {u_high_value}. Is this application a crown jewel: {u_crown_jewel}.
+             Is this application etomm: {u_etomm}. The delivery manager for this application is {delivery_manager}. The Vice President of delivery is {u_vp_of_delivery}. The operational status of this application is: {operational_status}.
+             The type of consumer for this application is {consumer_type}. The application number is {number}. The CMDB CI for this application is managed by {u_qs_cmdb_ci_managed_by}. This application is used for {used_for}.
+             The status of the service for this application is {service_status}. The system class name for this application is {sys_class_name}. The line of business (LOB) director for this application is {u_lob_director}.
+             The vendor for this application is {vendor}. The classification of service for this application is {service_classification}. Is this application for mobile: {u_mobile}.
+             The application support team is {u_application_support_team}. Is this application Bell SAST: {u_bell_sast}. Is this application a customer application: {u_customer_application}.
+             This application is used for messaging and collaboration: {u_messaging_and_collaboration}. Does the application have traffic discovery: {traffic_discovery}. This applications classification is {u_application_classification}.
+             This application has SCM control: {u_scm_control}. The operational incident impacts of this application is {u_operational_incident_impacts}. This application is a desktop application: {u_desktop_application}.
+             The TAM domain for this application is {u_tam_domain}. The TAM subdomain for this application is {u_tam_sub_domain}. The SSDLC delivery pipeline for this application is {u_ssdlc_delivery_pipeline}.
+             The manufacturer for this application is {manufacturer}. The inventory scorecard group for this application is {u_inventory_scorecard_group}. The business partner director for this application is {u_business_partner_director}.
+             The Upstream or Downstream Applications associated with this application are {u_upstream_downstream_applications}. The service type of this application is {u_service_type}. The source of this application is {source}.
+             The application type of this application is {u_application_type}. The date this application was retired, if applicable, is {u_retired}. The email for this application's support team is {u_application_support_team_email}.
+             The FQDN for this application is {fqdn}. This application is Bell SSDLC: {u_bell_ssdlc}. This application is a big data application: {u_big_data}.
+             This application is for AIP: {u_aip}. The attestation status of this application is {attestation_status}. The application is attested: {attested}. 
+             The application support team service level for this application is rated {u_application_support_team_service_level}. The Bell service level for this application is {u_bell_service_level}.
+             The long description of this application in French is {u_long_description_fr}."""

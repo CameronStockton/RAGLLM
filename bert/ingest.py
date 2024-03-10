@@ -19,6 +19,7 @@ ES_HTTP_AUTH = (
 
 class ESIngester:
     def __init__(self, hosts=ES_HOSTS, verify_certs=True, ca_certs=ES_CA_CERTS, http_auth=ES_HTTP_AUTH):
+        """Initialize the ElasticSearch Ingester with relevant information (including the BERT model)"""
         self.hosts = hosts
         self.verify_certs = verify_certs
         self.ca_certs = ca_certs
@@ -35,6 +36,7 @@ class ESIngester:
         self.model = BERT()
 
     def setup_ingest(self, directory_path='./Layla_Notes'):
+        """Iterate thru folder to sort files by type (PDFs, R-scripts, Documents)"""
         # Lists to store file paths
         paths_pdf = []
         paths_R = []
@@ -54,6 +56,7 @@ class ESIngester:
         self.docs = paths_docx
         
     def ingest_pdf(self, pdf_path, raw_index, vector_index):
+        """Ingest PDF into ElasticSearch raw text and embeddings indices"""
         try:
             print(f'Opening {pdf_path}')
             doc = fitz.open(pdf_path)
@@ -81,6 +84,7 @@ class ESIngester:
                 continue  # Skip to the next page if there's an error
 
     def ingest_r_script(self, r_path, raw_index, vector_index):
+        """Ingest R Script into ElasticSearch raw text and embeddings indices"""
         doc_id = str(uuid.uuid4())
         with open(r_path, 'r') as file:
             content = file.read()
@@ -91,6 +95,7 @@ class ESIngester:
         self._es.index(index=vector_index, body={"embeddings": embeddings.tolist()}, id=doc_id)
 
     def ingest_docx(self, docx_path, raw_index, vector_index):
+        """Ingest Document into ElasticSearch raw text and embeddings indices"""
         try:
             doc = Document(docx_path)
         except Exception as e:
@@ -114,7 +119,7 @@ class ESIngester:
             print(f"Paragraph {para_num} indexed successfully")
 
     def create_es_text_index(self, index_name):
-        # Create a standard index for text
+        """Create a raw ES index"""
         index_body = {
             "mappings": {
                 "properties": {
@@ -125,7 +130,7 @@ class ESIngester:
         self.create_index_if_not_exists(index_name, index_body)
 
     def create_es_vector_index(self, index_name, dimensions=384):
-        # Create an index for vector embeddings
+        """Create a vector ES index"""
         index_body = {
             "mappings": {
                 "properties": {
@@ -139,6 +144,7 @@ class ESIngester:
         self.create_index_if_not_exists(index_name, index_body)
 
     def create_index_if_not_exists(self, index_name, index_body):
+        """Creates an ES index if it does not already exist"""
         if not self._es.indices.exists(index=index_name):
             self._es.indices.create(index=index_name, body=index_body)
             print(f"Index {index_name} created.")
@@ -184,4 +190,24 @@ class ESIngester:
             
             # Index the paragraph text and embeddings into Elasticsearch
             self._es.index(index=raw_index, body={"content": lecture, "lec_num": num, "docx_path": docx_path}, id=doc_id)
+            self._es.index(index=vector_index, body={"embeddings": embeddings}, id=doc_id)
+
+    def natural_language_from_template(self, raw_data_path, template, raw_index, vector_index):
+        """Ingest SQL data from a natural language template"""
+        with open(raw_data_path) as f:
+            data = json.load(f)
+        
+        placeholder_names = re.findall(r'\{([^}]+)\}', template)
+        # Iterate through each item in the JSON data
+        for item in data:
+            # Create a dictionary containing only the keys present in the template
+            formatted_item = {key: item[key] for key in placeholder_names if key in item}
+            
+            # Apply the template to the filtered item
+            formatted_string = template.format_map(formatted_item)
+
+            doc_id = f"{str(uuid.uuid4())}_app"
+            embeddings = self.model.generate_embeddings(formatted_string)
+
+            self._es.index(index=raw_index, body={"content": formatted_string}, id=doc_id)
             self._es.index(index=vector_index, body={"embeddings": embeddings}, id=doc_id)

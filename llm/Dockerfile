@@ -17,4 +17,4 @@ EXPOSE 5000
 ENV NAME LLM
 
 # Run app.py when the container launches
-CMD ["python", "summarizer.py"]
+CMD ["python", "qa.py"]

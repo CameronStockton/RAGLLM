@@ -258,7 +258,7 @@ services:
       ES_CA_CERTS: '/usr/share/elasticsearch/config/certs/ca/ca.crt'
       ES_USER: 'elastic'
       ES_PASSWORD: 'laylabakaa'
-    command: python /llm/summarizer.py
+    command: python /llm/qa.py
 
 volumes:
   shared-db-volume:
