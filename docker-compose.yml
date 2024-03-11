@@ -221,6 +221,8 @@ services:
     build:
       context: ./bert
       dockerfile: Dockerfile
+    env_file:
+      - .env
     stdin_open: true  # Equivalent to -i in docker run
     tty: true         # Equivalent to -t in docker run
     volumes:
@@ -237,12 +239,15 @@ services:
       ES_CA_CERTS: '/usr/share/elasticsearch/config/certs/ca/ca.crt'
       ES_USER: 'elastic'
       ES_PASSWORD: 'laylabakaa'
+      HUGGINGFACE_CO_TOKEN: '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'
     command: python /bert/run.py
 
   llm:
     build:
       context: ./llm
       dockerfile: Dockerfile
+    env_file:
+      - .env
     stdin_open: true  # Equivalent to -i in docker run
     tty: true         # Equivalent to -t in docker run
     volumes:
@@ -258,6 +263,7 @@ services:
       ES_CA_CERTS: '/usr/share/elasticsearch/config/certs/ca/ca.crt'
       ES_USER: 'elastic'
       ES_PASSWORD: 'laylabakaa'
+      HUGGINGFACE_CO_TOKEN: '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'
     command: python /llm/qa.py
 
 volumes:

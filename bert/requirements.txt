@@ -6,3 +6,4 @@ python-docx
 numpy
 sentence-transformers
 requests
+sklearn

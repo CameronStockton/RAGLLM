@@ -9,6 +9,7 @@ import numpy as np
 import uuid
 import re
 
+
 # Initialize Elasticsearch
 ES_HOSTS = json.loads(os.environ.get('ES_HOSTS', '["https://ragllm-es01-1:9200", "https://ragllm-es02-1:9200", "https://ragllm-es03-1:9200"]'))
 ES_CA_CERTS = os.environ.get('ES_CA_CERTS', '/usr/share/elasticsearch/config/certs/ca/ca.crt')
