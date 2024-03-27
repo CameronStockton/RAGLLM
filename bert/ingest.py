@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import uuid
 import re
+import pdfplumber
 
 
 # Initialize Elasticsearch
@@ -60,29 +61,51 @@ class ESIngester:
         """Ingest PDF into ElasticSearch raw text and embeddings indices"""
         try:
             print(f'Opening {pdf_path}')
-            doc = fitz.open(pdf_path)
-            print('doc opened successfully')
+            with pdfplumber.open(pdf_path) as pdf:
+                print('doc opened successfully')
+                
+                for page_num, page in enumerate(pdf.pages):
+                    try:
+                        if pdf_path.endswith("_slide.pdf"):
+                            height = page.height
+                            width = page.width
+                            midpoint = height / 2
+                            
+                            # Define crop boxes for the top and bottom slides
+                            top_box = (0, 0, width, midpoint)
+                            bottom_box = (0, midpoint, width, height)
+                            
+                            # Extract text from the top slide
+                            top_slide = page.within_bbox(top_box).extract_text()
+                            print(f"Page {page_num + 1} Top Slide Text:\n{top_slide}\n")
+                            
+                            # Extract text from the bottom slide
+                            bottom_slide = page.within_bbox(bottom_box).extract_text()
+                            print(f"Page {page_num + 1} Bottom Slide Text:\n{bottom_slide}\n")
+
+                            # Handle text extraction and indexing for both slides here...
+                            for slide_text, slide_position in [(top_slide, 'top'), (bottom_slide, 'bottom')]:
+                                if slide_text:  # Check if text was extracted
+                                    doc_id = f"{uuid.uuid4()}_page_{page_num}_{slide_position}"
+                                    embeddings = self.model.generate_embeddings(slide_text)
+                                    self._es.index(index=raw_index, body={"content": slide_text, "page": page_num, "position": slide_position, "pdf_path": pdf_path}, id=doc_id)
+                                    self._es.index(index=vector_index, body={"embeddings": embeddings}, id=doc_id)
+                        else:
+                            # For non-slide PDFs, extract text from the entire page
+                            text = page.extract_text()
+                            print(f"Page {page_num + 1} Text:\n{text}\n")
+
+                            # Similar handling for text extraction and indexing as above...
+                            if text:  # Check if text was extracted
+                                doc_id = f"{uuid.uuid4()}_page_{page_num}"
+                                embeddings = self.model.generate_embeddings(text)
+                                self._es.index(index=raw_index, body={"content": text, "page": page_num, "pdf_path": pdf_path}, id=doc_id)
+                                self._es.index(index=vector_index, body={"embeddings": embeddings}, id=doc_id)
+                    except Exception as e:
+                        print(f"Error processing page {page_num} in {pdf_path}: {e}")
+                        continue  # Skip to the next page if there's an error
         except Exception as e:
             print(f"Error opening PDF {pdf_path}: {e}")
-            return
-
-        for page_num, page in enumerate(doc):
-            try:
-                text = page.get_text()
-                print(f'Page {page_num} read successfully')
-                
-                # Generate a unique ID for each page
-                doc_id = f"{str(uuid.uuid4())}_page_{page_num}"
-                
-                # Generate embeddings for the page text
-                embeddings = self.model.generate_embeddings(text)
-                
-                # Index the page text and embeddings into Elasticsearch
-                self._es.index(index=raw_index, body={"content": text, "page": page_num, "pdf_path": pdf_path}, id=doc_id)
-                self._es.index(index=vector_index, body={"embeddings": embeddings}, id=doc_id)
-            except Exception as e:
-                print(f"Error processing page {page_num} in {pdf_path}: {e}")
-                continue  # Skip to the next page if there's an error
 
     def ingest_r_script(self, r_path, raw_index, vector_index):
         """Ingest R Script into ElasticSearch raw text and embeddings indices"""

@@ -3,11 +3,12 @@ from bert import BERT
 import requests
 from bell.applications_template import app_template
 
-create = False
-ingest = False
+create = True
+ingest = True
 fine_tune = False
-run = True
 bell = False
+
+run = True
 
 ingester = ESIngester()
 ingester.setup_ingest()
@@ -15,8 +16,6 @@ ingester.setup_ingest()
 if create:
     ingester.create_es_text_index("notes")
     ingester.create_es_vector_index("embeddings")
-    ingester.create_es_text_index("app_raw")
-    ingester.create_es_vector_index("app_vec")
 
 if ingest:
     for path_pdf in ingester.pdfs:
@@ -45,7 +44,7 @@ if run:
             if user_query.lower() == 'exit':
                 print("Exiting the interactive search.")
                 break
-            relevant_docs = bert_model.natural_language_query(user_query, "app_raw", "app_vec")
+            relevant_docs = bert_model.natural_language_query(user_query, "notes", "embeddings")
 
             concatenated_context = " ".join([doc['content'] for doc in relevant_docs])  # Assuming each doc has a 'content' field
 

@@ -9,17 +9,35 @@ class LLM:
     def __init__(self):
         """Initialize the LLM model"""
         access_token = "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"
-        self.model = pipeline("question-answering", model="deepset/roberta-base-squad2")
-        #self.model = pipeline("text-generation", model="meta-llama/Llama-2-7b-chat-hf", token = access_token)
+        #self.model = pipeline("question-answering", model="deepset/roberta-base-squad2")
+        self.model = pipeline("text-generation", model="meta-llama/Llama-2-7b-chat-hf", token = access_token)
 
+    def extract_answer(self, generated_text):
+        # Define the start of the answer section
+        answer_start = generated_text.find("Answer:") + len("Answer:")
+        # Extract and return the text after "Answer:"
+        return generated_text[answer_start:].strip()
+    
     def answer_question(self, context, question):
         """Answer a user's question in natural language"""
-        return self.model(question=question, context=context)
-        """prompt = f"Context: {context}\nQuestion: {question}\nAnswer:"
+        #return self.model(question=question, context=context)
+        prompt = f"""
+        Consider the context provided to answer the question that follows. Use information from the context where possible; otherwise, rely on general knowledge. Do not include the instructions in your response.
+
+        Context:
+        {context}
+
+        Question:
+        {question}
+
+        Answer:
+        """
         # Since this is a text-generation model, might want to tweak generation parameters like max_length
-        response = self.model(prompt, max_length=512, num_return_sequences=1)
+        #response = self.model(prompt, max_length=512, num_return_sequences=1)
+        response = self.model(prompt, max_new_tokens=60, num_return_sequences=1)
         # Assuming the best answer is the first one returned by the model, but can look at others
-        return {"answer": response[0]['generated_text']}"""
+        answer = self.extract_answer(response[0]['generated_text'])
+        return {"answer": answer}
 
 llm = LLM()
 
