@@ -16,7 +16,7 @@ EXPOSE 5000
 # Define environment variable
 ENV NAME LLM
 # Define HF Token
-ENV HUGGINGFACE_CO_TOKEN="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"
+ENV HUGGINGFACE_CO_TOKEN=''
 
 
 # Run app.py when the container launches
