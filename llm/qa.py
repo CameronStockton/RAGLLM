@@ -8,7 +8,7 @@ app = Flask(__name__)
 class LLM:
     def __init__(self):
         """Initialize the LLM model"""
-        access_token = "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"
+        access_token = ""
         #self.model = pipeline("question-answering", model="deepset/roberta-base-squad2")
         self.model = pipeline("text-generation", model="meta-llama/Llama-2-7b-chat-hf", token = access_token)
 
